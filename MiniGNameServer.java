@@ -43,7 +43,7 @@ class MySocketThread implements Runnable {
             }
             //	}
             wholeText = wholeText.replace("\n","").replace("\r","").trim();
-            if(wholeText.contains("R,"))
+            if(wholeText.charAt(0) == 'R')
             {
                 boolean regResult = MiniGNameServer.RegisterWorker(wholeText);
                 if(regResult == true)
@@ -58,7 +58,7 @@ class MySocketThread implements Runnable {
                 }
                 //out.println("Done");
             }
-            else if(wholeText.contains("G,"))
+            else if(wholeText.charAt(0) == 'G')
             {
                 LinkedList<String> availableServers = MiniGNameServer.getListOfWorkers(wholeText);
                 if(availableServers.size() == 0)

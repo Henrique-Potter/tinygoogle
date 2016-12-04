@@ -4,6 +4,8 @@ import java.io.FileReader;
 import java.util.HashMap;
 import java.io.*;
 import java.net.*;
+import java.util.concurrent.ExecutionException;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Created by Ahmed on 11/29/2016.
@@ -70,8 +72,6 @@ public class Worker
                 }
             }
         }
-
-
     }
     class Reducer
     {
@@ -91,6 +91,83 @@ public class Worker
            }
         }
 
+        public void writeDataInIndex(String indexPath, String DocID)
+        {
+            String _filePath = indexPath;
+            try
+            {
+                File tempFile = new File(_filePath);
+                if(tempFile.exists())
+                {
+                    FileReader inputFile = new FileReader(_filePath);
+                    BufferedReader bufferReader = new BufferedReader(inputFile);
+                    Writer infoWriter = new BufferedWriter(new OutputStreamWriter(
+                            new FileOutputStream(_filePath), "utf-8"));
+
+                    while(bufferReader.readLine() != null)
+                    {
+                        String line = bufferReader.readLine();
+                        line = line.replace("\r", "").replace("\n", "").trim();
+                        if (!line.equals(""))
+                        {
+                            String[] Parts = line.split("\t");
+                            String word = Parts[0];
+                            String docs = Parts[1];
+
+                            if (wordCountToWrite.containsKey(word))
+                            {
+                                String[] allDocs = docs.split(";");
+                                HashMap<String, Integer> wordCountInDocs = new HashMap<String,Integer>();
+
+                                for(int i =0;i < allDocs.length;i++)
+                                {
+                                    String[] docInfo = allDocs[i].trim().split(",");
+                                    String docId = docInfo[0].trim();
+                                    String wordCount = docInfo[1].trim();
+                                    wordCountInDocs.put(docId, Integer.valueOf(wordCount));
+                                }
+
+                                if(wordCountInDocs.containsKey(DocID))
+                                {
+
+                                }
+                                else
+                                {
+                                    infoWriter.write(word + "\t" + docs + ";"+DocID+","+wordCountToWrite.get(word)+"\n");
+                                }
+                                wordCountToWrite.remove(word);
+                            }
+                            else
+                            {
+                                infoWriter.write(word + "\t" + docs + "\n");
+                            }
+                        }
+                    }
+                    bufferReader.close();
+                    // Write RemainingWords
+                    for(String word : wordCountToWrite.keySet())
+                    {
+                        infoWriter.write(word + "\t" + DocID+","+wordCountToWrite.get(word)+"\n");
+                    }
+                    infoWriter.close();
+                }
+                else
+                {
+                    Writer infoWriter = new BufferedWriter(new OutputStreamWriter(
+                            new FileOutputStream(_filePath), "utf-8"));
+                    for(String word : wordCountToWrite.keySet())
+                    {
+                        infoWriter.write(word + "\t" + DocID+","+wordCountToWrite.get(word)+"\n");
+                    }
+                    infoWriter.close();
+                }
+            }
+            catch (Exception e)
+            {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
     }
 
     Mapper mP = new Mapper();
@@ -99,11 +176,37 @@ public class Worker
     String workerType = ""; // M, R, MR
     int numberOfReducers = 0;
     HashMap<Integer,String> reducerPhoneBook = new HashMap<Integer, String>();
-    int ID;
-    int myPortNumber = 0;
-    String myIPAddress = "";
 
-    public int hashFunction(String token, int seed)
+    int ID;
+    String myPortNumber = "";
+    String myIPAddress = "";
+    String _indexPath = "";
+
+    String indexMasterIP = "";
+    String indexMasterPortNumber = "";
+
+    public Worker(int myID, String _myIP, String _myPortNumber, String indexPath, String _indexMasterIP, String _indexMasterPortNumber, int _numberOfReducers, String reducersInformation)
+    {
+        ID = myID;
+        _indexPath = indexPath;
+        myIPAddress = _myIP;
+        myPortNumber =  _myPortNumber;
+        indexMasterIP = _indexMasterIP;
+        indexMasterPortNumber = _indexMasterPortNumber;
+        numberOfReducers =_numberOfReducers;
+
+        String[] reducers = reducersInformation.split(";");
+
+        for(String red : reducers)
+        {
+            String parts[] = red.split(" ");
+            String id = parts[0];
+            String entryPoint = parts[1];
+            reducerPhoneBook.put(Integer.valueOf(id), entryPoint);
+        }
+    }
+
+    public int hashFunction(String token, int seed) // seed is the number of reducers -> number of workers as workers are both reducers and mappers
     {
         char firstChar = token.charAt(0);
         int charValue = firstChar - 'a';
@@ -114,8 +217,10 @@ public class Worker
         return reducerId;
     }
 
-    public void execute(int startingIndex, int chunkLength, String textFilePath)
+    public void execute(String DocID, int startingIndex, int chunkLength, String textFilePath)
     {
+        Thread recieveDataThread = new Thread(){public void run(){try{recieveInformation();} catch(Exception v) {}}};
+        recieveDataThread.start();
         HashMap<String,Integer> wordCount = mP.Map( startingIndex,  chunkLength,  textFilePath);
         for(String word : wordCount.keySet())
         {
@@ -123,11 +228,53 @@ public class Worker
             communicateWithReducer(reducerId, word, wordCount.get(word));
         }
 
-        //Write In index, and wait for index master to termintate the process
+        // send Index master that reducerFinishedWorking
+        communicateWithIndexMaster();
 
+        // wait for index master to termintate the process
+        try
+        {
+            recieveDataThread.join();
+        }
+        catch(Exception e)
+        {
+
+        }
+
+        //Write In index
+        rR.writeDataInIndex(_indexPath,DocID);
     }
 
+    public void communicateWithIndexMaster()
+    {
+        try
+        {
+            DatagramSocket clientSocket = new DatagramSocket();
+            byte[] sendData = new byte[64];
+            byte[] receiveData = new byte[64];
 
+            String message = "Done";
+            sendData = message.getBytes();
+            InetAddress IPAddress = InetAddress.getByName(indexMasterIP);
+            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(indexMasterPortNumber));
+
+
+            clientSocket.send(sendPacket);
+            //DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            //clientSocket.receive(receivePacket);
+            //String reply = new String(receivePacket.getData());
+            //if(reply.toLowerCase().equals("ack"))
+            //{
+                clientSocket.close();
+            //}
+
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
+    }
 
     public void communicateWithReducer(int reducerID, String word, int currentWordCount)
     {
@@ -139,7 +286,7 @@ public class Worker
         {
             String reducerEntryPoint = reducerPhoneBook.get(reducerID);
 
-            String[] parts = reducerEntryPoint.split(";");
+            String[] parts = reducerEntryPoint.split("_");
             String ipAddress = parts[0].trim();
             String portNumber = parts[1].trim();
 
@@ -157,7 +304,7 @@ public class Worker
 
             String message = word + ":" + currentWordCount;
             sendData = message.getBytes();
-            InetAddress IPAddress = InetAddress.getByAddress(reducerIP.getBytes());
+            InetAddress IPAddress = InetAddress.getByName(reducerIP);
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(reducerPortNumber));
 
 
@@ -182,7 +329,7 @@ public class Worker
     {
         try
         {
-            DatagramSocket serverSocket = new DatagramSocket(myPortNumber);
+            DatagramSocket serverSocket = new DatagramSocket(Integer.valueOf(myPortNumber));
             byte[] receiveData = new byte[64];
             byte[] sendData = new byte[64];
             while (true)
@@ -211,4 +358,6 @@ public class Worker
 
         }
     }
+
 }
+
