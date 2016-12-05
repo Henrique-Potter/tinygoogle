@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../../Work Space_4/MiniGoogleNameServer/MiniGoogleNameServer.iml" filepath="$PROJECT_DIR$/../../Work Space_4/MiniGoogleNameServer/MiniGoogleNameServer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/MiniGoogleNameServer.iml" filepath="$PROJECT_DIR$/MiniGoogleNameServer.iml" />
     </modules>
   </component>
 </project>
