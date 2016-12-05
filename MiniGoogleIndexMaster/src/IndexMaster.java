@@ -1,9 +1,7 @@
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.Socket;
+import java.net.*;
 import java.util.HashMap;
+import java.util.LinkedList;
 
 /**
  * Created by Ahmed on 12/3/2016.
@@ -12,6 +10,12 @@ public class IndexMaster
 {
     public static void main(String args[]) throws Exception
     {
+        ServerSocket s;
+        s = new ServerSocket(0);
+        int myPort = s.getLocalPort();
+        s.close();
+
+
         String FilePath = "G:\\Work\\Java\\Work Space_4\\test.txt";
         String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
         String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index\\IndPart";
@@ -24,9 +28,9 @@ public class IndexMaster
         String[] serversInfo = result.split(";");
         HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
 
-        for(String server :serversInfo)
+        for(int i =0;i < serversInfo.length;i++)//String server :serversInfo)
         {
-            taskDone.put(server, false);
+            taskDone.put(String.valueOf(i), false);
         }
         String workerPhoneBook = "";
         for(int i =0; i < serversInfo.length;i++)
@@ -42,28 +46,31 @@ public class IndexMaster
             String workerIP = serversInfo[i].split("_")[0];
             String workerPort = serversInfo[i].split("_")[1];
 
-            InitiateTask(i,String.valueOf(0), FilePath,String.valueOf(i * 800),"800",indexPath,workerIP,workerPort,serversInfo.length,workerPhoneBook);
+            InitiateTask(myPort,i,String.valueOf(0), FilePath,String.valueOf(i * 800),"800",indexPath,workerIP,workerPort,serversInfo.length,workerPhoneBook);
         }
         Boolean finished = false;
+        DatagramSocket serverSocket = new DatagramSocket(myPort);
         while(!finished)
         {
-            DatagramSocket serverSocket = new DatagramSocket(0);
-            byte[] receiveData = new byte[64];
+            System.out.println("Looping waiting for finishing signals");
 
+            byte[] receiveData = new byte[64];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             serverSocket.receive(receivePacket);
             String sentence = new String(receivePacket.getData());
-            if(sentence.equals("Done"))
+            sentence = sentence.replace("\n","").replace("\r","").trim();
+            if(sentence.contains(",Done"))
             {
                 System.out.println("RECEIVED: " + sentence);
                 InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
                 String finishedWorkerIP = IPAddress.toString();
-
+                finishedWorkerIP = finishedWorkerIP.replace("/","");
                 String key = finishedWorkerIP + "_" + port;
                 System.out.println( key + " Finished");
 
-                taskDone.replace(key, true);
+                String workerID = sentence.split(",")[0];
+                taskDone.replace(workerID, true);
             }
 
             finished = true;
@@ -77,8 +84,9 @@ public class IndexMaster
             }
         }
 
-        for(String key :  taskDone.keySet())
+        for(String key :  serversInfo)
         {
+            System.out.println("Terminating workers");
             String IP = key.split("_")[0];
             String Port = key.split("_")[1];
             terminateTask(IP,Port);
@@ -150,14 +158,14 @@ public class IndexMaster
 
     }
 
-    public static void InitiateTask(int workerID, String docID, String filePath,
+    public static void InitiateTask(int portNumber, int workerID, String docID, String filePath,
                                     String startingIndex, String chunkLength, String indexPath,
                                     String workerIP, String workerPort, int numOfReducers, String phoneBook)
     {
         String message = "DW," + workerID + ","+ docID + "," + filePath+ "," + startingIndex + "," + chunkLength + "," + indexPath+","+numOfReducers + "," +phoneBook ;
         try
         {
-            DatagramSocket clientSocket = new DatagramSocket();
+            DatagramSocket clientSocket = new DatagramSocket(portNumber);
             byte[] sendData = new byte[1024];
 
             //String message = word + ":" + currentWordCount;

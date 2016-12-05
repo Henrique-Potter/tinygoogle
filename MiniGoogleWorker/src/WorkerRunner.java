@@ -16,19 +16,24 @@ public class WorkerRunner
 
 
         DatagramSocket serverSocket = new DatagramSocket(0);
-        byte[] receiveData = new byte[1024];
         int myPort = serverSocket.getLocalPort();
         String myIp = getMyIP();
         RegisterWithNameServer(nameServerIP, nameServerPort, myIp,myPort);
 
         while(true)
         {
+            byte[] receiveData = new byte[1024];
+            if (serverSocket.isClosed())
+            {
+                serverSocket = new DatagramSocket(myPort);
+            }
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             serverSocket.receive(receivePacket);
             String sentence = new String(receivePacket.getData());
-            System.out.println("RECEIVED: " + sentence);
+            sentence = sentence.replace("\n","").replace("\r","").trim();
             if(sentence.substring(0,3).equals("DW,"))
             {
+                System.out.println("RECEIVED: " + sentence);
                 sentence = sentence.substring(3);
                 InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
@@ -47,10 +52,19 @@ public class WorkerRunner
                 int numberOfReducers = Integer.valueOf(requestParts[6]);
                 String reducersPhoneBook = requestParts[7];
 
+
+                serverSocket.close();
                 Worker currentWorker = new Worker(workerID, myIp, String.valueOf(myPort), indexPath,
                         indexMasterIP, String.valueOf(indexMasterPortNumber), numberOfReducers, reducersPhoneBook);
 
                 currentWorker.execute(docID, Integer.valueOf(startingIndex), Integer.valueOf(chunkLength), filePath);
+
+                System.out.println("Finished Execution");
+                //String capitalizedSentence = sentence.toUpperCase();
+                //sendData = capitalizedSentence.getBytes();
+                //DatagramPacket sendPacket =
+                //        new DatagramPacket(sendData, sendData.length, IPAddress, port);
+                //serverSocket.send(sendPacket);
             }
         }
     }

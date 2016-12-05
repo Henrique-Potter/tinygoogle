@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
@@ -12,6 +13,20 @@ import java.util.regex.PatternSyntaxException;
  */
 public class Worker
 {
+    class MySocketThread implements Runnable
+    {
+        Worker _parentWorker;
+        public MySocketThread(Worker parentWorker) {
+            // store parameter for later user
+            _parentWorker = parentWorker;
+        }
+
+        public void run()
+        {
+            _parentWorker.recieveInformation();
+        }
+
+    }
     class Mapper
     {
         public  HashMap<String,Integer> Map(int startingIndex, int chunkLength, String textFilePath)
@@ -21,7 +36,7 @@ public class Worker
             try
             {
                 File tempFile = new File(_filePath);
-                if(tempFile.exists())
+                if (tempFile.exists())
                 {
                     FileReader inputFile = new FileReader(_filePath);
                     BufferedReader bufferReader = new BufferedReader(inputFile);
@@ -45,8 +60,7 @@ public class Worker
                         //bufferReader.close();
                     }
 
-
-                    HashMap<String,Integer> wordCount = new HashMap<String,Integer>();
+                    HashMap<String, Integer> wordCount = new HashMap<String, Integer>();
                     countWords(wordCount, Content.toString());
                     bufferReader.close();
                     return wordCount;
@@ -63,8 +77,10 @@ public class Worker
 
         private void countWords(HashMap<String,Integer> wordCount, String text)
         {
-            text = text.replace("\n"," ").replace("\r"," ").trim();
-            text = text.replaceAll("\\^([0-9A-Za-z]+)", " ");
+            Pattern p = Pattern.compile("([^0-9A-Za-z\\s])+",Pattern.DOTALL);
+            text = text.replace("\n"," ").replace("\r"," ").replace(","," ").trim();
+            //text = text.replaceAll("^([0-9A-Za-z]+)", " ");
+            text =  p.matcher(text).replaceAll("");
             text = text.replaceAll("\\s+", " ");
             text = text.trim().toLowerCase();
 
@@ -91,16 +107,16 @@ public class Worker
 
         public void Reduce(String key, int count)
         {
-           if(wordCountToWrite.containsKey(key))
-           {
-               int previousCount = wordCountToWrite.get(key);
-               previousCount += count;
-               wordCountToWrite.replace(key,count);
-           }
+            if(wordCountToWrite.containsKey(key))
+            {
+                int previousCount = wordCountToWrite.get(key);
+                previousCount += count;
+                wordCountToWrite.replace(key,count);
+            }
             else
-           {
-               wordCountToWrite.put(key, count);
-           }
+            {
+                wordCountToWrite.put(key, count);
+            }
         }
 
         public void writeDataInIndex(String indexPath, String DocID)
@@ -203,7 +219,7 @@ public class Worker
         _indexPath = indexPath;
         myIPAddress = _myIP;
         myPortNumber =  _myPortNumber;
-        indexMasterIP = _indexMasterIP;
+        indexMasterIP = _indexMasterIP.replace("/","");
         indexMasterPortNumber = _indexMasterPortNumber;
         numberOfReducers =_numberOfReducers;
 
@@ -231,7 +247,10 @@ public class Worker
 
     public void execute(String DocID, int startingIndex, int chunkLength, String textFilePath)
     {
-        Thread recieveDataThread = new Thread(){public void run(){try{recieveInformation();} catch(Exception v) {}}};
+        Runnable r = new MySocketThread(this);
+        Thread recieveDataThread = new Thread(r);
+
+        //Thread recieveDataThread = new Thread(){public void run(){try{recieveInformation();} catch(Exception v) {}}};
         recieveDataThread.start();
         HashMap<String,Integer> wordCount = mP.Map( startingIndex,  chunkLength,  textFilePath);
         for(String word : wordCount.keySet())
@@ -250,22 +269,24 @@ public class Worker
         }
         catch(Exception e)
         {
-
+            System.out.println("error in waiting");
         }
 
         //Write In index
         rR.writeDataInIndex(_indexPath,DocID);
+
+        //System.out.println("Finished Execution");
     }
 
     public void communicateWithIndexMaster()
     {
         try
         {
-            DatagramSocket clientSocket = new DatagramSocket();
+            DatagramSocket clientSocket = new DatagramSocket();//Integer.valueOf(myPortNumber));
             byte[] sendData = new byte[64];
             byte[] receiveData = new byte[64];
 
-            String message = "Done";
+            String message = String.valueOf(ID) + ",Done";
             sendData = message.getBytes();
             InetAddress IPAddress = InetAddress.getByName(indexMasterIP);
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(indexMasterPortNumber));
@@ -277,9 +298,9 @@ public class Worker
             //String reply = new String(receivePacket.getData());
             //if(reply.toLowerCase().equals("ack"))
             //{
-                clientSocket.close();
+            clientSocket.close();
             //}
-
+            System.out.println("Finished Inexing");
         }
         catch(Exception e)
         {
@@ -310,7 +331,7 @@ public class Worker
     {
         try
         {
-            DatagramSocket clientSocket = new DatagramSocket();
+            DatagramSocket clientSocket = new DatagramSocket();//Integer.valueOf(myPortNumber));
             byte[] sendData = new byte[64];
             byte[] receiveData = new byte[64];
 
@@ -324,6 +345,7 @@ public class Worker
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             clientSocket.receive(receivePacket);
             String reply = new String(receivePacket.getData());
+            reply = reply.replace("\n","").replace("\r","").trim();
             if(reply.toLowerCase().equals("ack"))
             {
                 clientSocket.close();
@@ -342,20 +364,29 @@ public class Worker
         try
         {
             DatagramSocket serverSocket = new DatagramSocket(Integer.valueOf(myPortNumber));
-            byte[] receiveData = new byte[64];
-            byte[] sendData = new byte[64];
             while (true)
             {
+                byte[] receiveData = new byte[64];
+                byte[] sendData = new byte[64];
                 DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 serverSocket.receive(receivePacket);
                 String sentence = new String(receivePacket.getData());
+                sentence = sentence.replace("\n","").replace("\r","").trim();
+
+                System.out.println("Recieved " + sentence);
+
                 if(sentence.equals("endprocess"))
                 {
-                    break;
+                    System.out.println("recieved finishing command from index master");
+                    serverSocket.close();
+                    return;
                 }
                 String[] parts = sentence.split(":");
                 String word = parts[0];
-                int count = Integer.valueOf(parts[1]);
+                String number = parts[1].replace("\n","").replace("\r","").replace("\\","").replace("/","").trim();
+                int count = Integer.valueOf(number);
+
+                //System.out.println("Recieved word "+ word + ":" + count);
                 rR.Reduce(word, count);
                 InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
@@ -363,11 +394,13 @@ public class Worker
                 sendData = "ack".getBytes();
                 DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
                 serverSocket.send(sendPacket);
+                //serverSocket.close();
             }
         }
         catch(Exception e)
         {
-
+            e.printStackTrace();
+            System.out.println("exception");
         }
     }
 
