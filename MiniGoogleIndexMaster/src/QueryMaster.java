@@ -1,112 +1,139 @@
 import java.io.*;
 import java.net.*;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Created by Ahmed on 12/6/2016.
  */
 public class QueryMaster
 {
-    public static void main(String args[]) throws Exception
+    private long heartBeatThreshold = 5;
+    private String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index";
+    private String[] serversInfo;
+    private int myPort = 0;
+    private DatagramSocket serverSocket;
+    private String queryToRun = "";
+    private HashMap<String,Integer> docsRank = new HashMap<String,Integer>();
+
+    public QueryMaster(String Query)
     {
-        ServerSocket s;
-        s = new ServerSocket(0);
-        int myPort = s.getLocalPort();
-        s.close();
-
-        String FullQuery = "I hate hate hate hate people people";
-        String FilePath = "G:\\Work\\Java\\Work Space_4\\test.txt";
-
-        //-------------------Name Server
-        String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
-        String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index";
-        String[] parts = nameServerInfo.split("\n");
-        int nameServerPort = new Integer(parts[0].trim());
-        String nameServerIP = parts[1].trim();
-
-        //--------------------- Asking for workers
-        String result = requestWorkers(2,nameServerIP,String.valueOf(nameServerPort));
-        result = result.replace("\n","").replace("\r","").trim();
-        String[] serversInfo = result.split(";");
-
-        //-------------------Task control
-
-        HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
-        for(int i =0;i < serversInfo.length;i++)//String server :serversInfo)
+        queryToRun = Query;
+    }
+    public void RunQueryService()
+    {
+        try
         {
-            taskDone.put(String.valueOf(i), false);
-        }
-        HashMap<Integer,StringBuilder> queryDistribution = DistributeWordsOnWorkers(FullQuery, serversInfo.length);
-        //String workerPhoneBook = "";
-        //for(int i =0; i < serversInfo.length;i++)
-        //{
-        //    workerPhoneBook+= i+" " + serversInfo[i] + ";";
-       // }
-        //workerPhoneBook = workerPhoneBook.substring(0,workerPhoneBook.length() - 1);
-        for(int i =0; i < serversInfo.length;i++)
-        {
-            int workerID = i;
-            String indexPath = indexFolder;// + i + ".txt";
+            ServerSocket s;
+            s = new ServerSocket(0);
+            myPort = s.getLocalPort();
+            s.close();
 
-            String workerIP = serversInfo[i].split("_")[0];
-            String workerPort = serversInfo[i].split("_")[1];
-            String workerQuery = queryDistribution.get(i).toString().trim();
-            InitiateTask(myPort,i,workerQuery,indexPath,workerIP,workerPort,serversInfo.length);
-        }
-        Boolean finished = false;
+            String FullQuery = queryToRun;//"I hate hate hate hate people people";
+            LinkedList<String> Replies = new LinkedList<String>();
+            docsRank = new HashMap<String,Integer>();
+            //String FilePath = "G:\\Work\\Java\\Work Space_4\\test.txt";
 
-        StringBuilder allInformation = new StringBuilder();
-        DatagramSocket serverSocket = new DatagramSocket(myPort);
-        while(!finished)
-        {
-            System.out.println("Looping waiting for finishing signals");
+            //-------------------Name Server
+            String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
 
-            byte[] receiveData = new byte[64];
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            serverSocket.receive(receivePacket);
-            String sentence = new String(receivePacket.getData());
-            sentence = sentence.replace("\n","").replace("\r","").trim();
-            if(sentence.contains(",Done"))
+            String[] parts = nameServerInfo.split("\n");
+            int nameServerPort = new Integer(parts[0].trim());
+            String nameServerIP = parts[1].trim();
+
+            //--------------------- Asking for workers
+            String result = requestWorkers(2, nameServerIP, String.valueOf(nameServerPort));
+            result = result.replace("\n", "").replace("\r", "").trim();
+            serversInfo = result.split(";");
+
+            //-------------------Task control
+
+            HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
+            HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
+            HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
+
+            for (int i = 0; i < serversInfo.length; i++)//String server :serversInfo)
             {
-                System.out.println("RECEIVED: " + sentence);
+                taskDone.put(String.valueOf(i), false);
+            }
+            HashMap<Integer, StringBuilder> queryDistribution = DistributeWordsOnWorkers(FullQuery, serversInfo.length);
+            //String workerPhoneBook = "";
+            //for(int i =0; i < serversInfo.length;i++)
+            //{
+            //    workerPhoneBook+= i+" " + serversInfo[i] + ";";
+            // }
+            //workerPhoneBook = workerPhoneBook.substring(0,workerPhoneBook.length() - 1);
+
+            serverSocket = new DatagramSocket(myPort);
+
+            for (int i = 0; i < serversInfo.length; i++)
+            {
+                int workerID = i;
+                String indexPath = indexFolder;// + i + ".txt";
+
+                String workerIP = serversInfo[i].split("_")[0];
+                String workerPort = serversInfo[i].split("_")[1];
+                String workerQuery = queryDistribution.get(i).toString().trim();
+                InitiateTask(i, workerQuery, indexPath, workerIP, workerPort, serversInfo.length);
+            }
+            Boolean finished = false;
+
+            StringBuilder allInformation = new StringBuilder();
+
+            while (!finished)
+            {
+                System.out.println("Looping waiting for finishing signals");
+
+                byte[] receiveData = new byte[64];
+                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                serverSocket.receive(receivePacket);
+                String sentence = new String(receivePacket.getData());
+                sentence = sentence.replace("\n", "").replace("\r", "").trim();
+                if (sentence.contains(",Done"))
+                {
+                    System.out.println("RECEIVED: " + sentence);
                 /*InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
                 String finishedWorkerIP = IPAddress.toString();
                 finishedWorkerIP = finishedWorkerIP.replace("/","");
                 String key = finishedWorkerIP + "_" + port;
                 */
-                String workerID = sentence.split(",")[0];
-                System.out.println( "Worker : " + workerID + " Finished");
-                taskDone.replace(workerID, true);
-            }
-            else
-            {
-                allInformation.append(sentence + "\n");
-            }
-            finished = true;
-            for(String key : taskDone.keySet())
-            {
-                if(taskDone.get(key) == false)
+                    String workerID = sentence.split(",")[0];
+                    System.out.println("Worker : " + workerID + " Finished");
+                    taskDone.replace(workerID, true);
+                }
+                else if (sentence.substring(0, 4).equals("HBM,"))
                 {
-                    finished = false;
-                    break;
+                    checkWorkersStateAndDoWorkShifiting(sentence, heartBeatTracker, taskDone, repliesReceived);
+                }
+                else
+                {
+                    Replies.add(sentence.trim());
+                    allInformation.append(sentence + "\n");
+                }
+                finished = true;
+                for (String key : taskDone.keySet())
+                {
+                    if (taskDone.get(key) == false)
+                    {
+                        finished = false;
+                        break;
+                    }
                 }
             }
-        }
 
-        System.out.println(allInformation.toString());
-        /*for(String key :  serversInfo)
+            docsRank = rerankResults(Replies);
+            System.out.println(allInformation.toString());
+        }
+        catch (Exception e)
         {
-            System.out.println("Terminating workers");
-            String IP = key.split("_")[0];
-            String Port = key.split("_")[1];
-            terminateTask(IP,Port);
-        }*/
+            e.printStackTrace();
+        }
     }
 
-    public static String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
+    private  String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
     {
         try
         {
@@ -136,7 +163,7 @@ public class QueryMaster
         return "";
     }
 
-    public static String readNameServerCredentialsFromFile(String _filePath)
+    private  String readNameServerCredentialsFromFile(String _filePath)
     {
         String FileContent = "";
         try
@@ -171,13 +198,13 @@ public class QueryMaster
 
     }
 
-    public static void InitiateTask(int portNumber, int workerID, String query, String indexFolder,
+    private  void InitiateTask(int workerID, String query, String indexFolder,
                                     String workerIP, String workerPort, int numOfReducers)
     {
-        String message = "DQW," + workerID + ","+ indexFolder+","+numOfReducers + "," +query ;
+        String message = "DQW," + workerID + "," + indexFolder + "," + numOfReducers + "," + query;
         try
         {
-            DatagramSocket clientSocket = new DatagramSocket(portNumber);
+            //DatagramSocket clientSocket = new DatagramSocket(portNumber);
             byte[] sendData = new byte[1024];
 
             //String message = word + ":" + currentWordCount;
@@ -186,10 +213,9 @@ public class QueryMaster
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(workerPort));
 
 
-            clientSocket.send(sendPacket);
-            clientSocket.close();
-        }
-        catch(Exception e)
+            serverSocket.send(sendPacket);
+            //clientSocket.close();
+        } catch (Exception e)
         {
             e.printStackTrace();
             System.out.println(e.getMessage());
@@ -197,7 +223,7 @@ public class QueryMaster
     }
 
 
-    public static void terminateTask(String workerIP, String workerPort)
+    private  void terminateTask(String workerIP, String workerPort)
     {
         try
         {
@@ -210,14 +236,13 @@ public class QueryMaster
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(workerPort));
             clientSocket.send(sendPacket);
             clientSocket.close();
-        }
-        catch(Exception e)
+        } catch (Exception e)
         {
 
         }
     }
 
-    public static HashMap<Integer, StringBuilder> DistributeWordsOnWorkers(String Query, int numberOfWorkers)
+    private  HashMap<Integer, StringBuilder> DistributeWordsOnWorkers(String Query, int numberOfWorkers)
     {
         String cleanedQuery = Query.replace("\r", "").replace("\n", "").trim().toLowerCase();
         cleanedQuery = cleanedQuery.replace("([^0-9A-Za-z\\s])+", " ");
@@ -234,16 +259,16 @@ public class QueryMaster
             }
         }
         Tokens = new String[uniqueWords.size()];
-        Tokens =  uniqueWords.toArray(Tokens);
+        Tokens = uniqueWords.toArray(Tokens);
         HashMap<Integer, StringBuilder> workersWords = new HashMap<Integer, StringBuilder>();
         for (String token : Tokens)
         {
             int ID = hashFunction(token, numberOfWorkers);
             if (workersWords.containsKey(ID))
             {
-                StringBuilder sB= workersWords.get(ID);
+                StringBuilder sB = workersWords.get(ID);
                 sB.append(token + " ");
-                workersWords.replace(ID,sB);
+                workersWords.replace(ID, sB);
             }
             else
             {
@@ -256,14 +281,148 @@ public class QueryMaster
         return workersWords;
     }
 
-    public static int hashFunction(String token, int seed) // seed is the number of reducers -> number of workers as workers are both reducers and mappers
+    private  int hashFunction(String token, int seed) // seed is the number of reducers -> number of workers as workers are both reducers and mappers
     {
         char firstChar = token.charAt(0);
         int charValue = firstChar - 'a';
         int allChars = 'z' - 'a' + 1;
-        int winodwLength = (int)Math.ceil((float)allChars / (float)seed);
+        int winodwLength = (int) Math.ceil((float) allChars / (float) seed);
         int reducerId = charValue / winodwLength;
 
         return reducerId;
+    }
+
+    private  void HeartBeatHandler(String message, HashMap<String, LocalDateTime> hBeats)
+    {
+        String[] parts = message.split(",");
+        String workerID = parts[1].trim();
+        hBeats.replace(workerID, LocalDateTime.now());
+    }
+
+    private  LinkedList<String> getNonResponsiveWorkers(HashMap<String, LocalDateTime> hBeats)
+    {
+        LinkedList<String> nonResponsiveWorkers = new LinkedList<String>();
+        for (String id : hBeats.keySet())
+        {
+            long seconds = ChronoUnit.SECONDS.between(hBeats.get(id), LocalDateTime.now());
+            if (seconds > heartBeatThreshold)
+            {
+                nonResponsiveWorkers.add(id);
+            }
+            //long minutes = ChronoUnit.MINUTES.between(hBeats.get(id), LocalDateTime.now());
+            //long hours = ChronoUnit.HOURS.between(fromDate, toDate);
+        }
+        return nonResponsiveWorkers;
+    }
+
+    private  void checkWorkersStateAndDoWorkShifiting(String heartBestMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState, HashMap<String, HashMap<String, Boolean>> repliesReceived)
+    {
+        HeartBeatHandler(heartBestMessage, heartBeatTracker);
+        LinkedList<String> nonResponsiveIDs = getNonResponsiveWorkers(heartBeatTracker);
+
+        for (String fallenWorkerID : nonResponsiveIDs)
+        {
+            if (taskState.get(fallenWorkerID) == true)
+            {
+            }
+            else
+            {
+                HashMap<String, Boolean> wordsSupposedToResponedOn = repliesReceived.get(fallenWorkerID);
+                String wordsNotRespondedOnFromWorker = "";
+                for (String word : wordsSupposedToResponedOn.keySet())
+                {
+                    if (wordsSupposedToResponedOn.get(word) == false)
+                    {
+                        wordsNotRespondedOnFromWorker += word + " ";
+                    }
+                }
+                wordsNotRespondedOnFromWorker = wordsNotRespondedOnFromWorker.trim();
+                if (wordsNotRespondedOnFromWorker.equals(""))
+                {
+                    // no need to find another worker, this worker word has been done and can be marked as finished
+                    taskState.replace(fallenWorkerID, true);
+                }
+                else
+                {
+                    // we should assign the remaining work to another worker
+                    String desiredWorkerID = "";
+                    for (String worker : taskState.keySet())
+                    {
+                        if (taskState.get(worker) == true)
+                        {
+                            desiredWorkerID = worker;
+                            break;
+                        }
+                    }
+                    if (!desiredWorkerID.equals(""))
+                    {
+                        taskState.remove(fallenWorkerID);
+                        taskState.replace(desiredWorkerID, false);
+                        repliesReceived.remove(fallenWorkerID);
+                        repliesReceived.remove(desiredWorkerID);
+                        HashMap<String, Boolean> wordsToSearchAgain = new HashMap<String, Boolean>();
+                        String[] words = wordsNotRespondedOnFromWorker.split(" ");
+                        for (String _word : words)
+                        {
+                            wordsToSearchAgain.put(_word, false);
+                        }
+                        repliesReceived.put(desiredWorkerID, wordsToSearchAgain);
+
+                        String workerIP = serversInfo[Integer.valueOf(desiredWorkerID)].split("_")[0];
+                        String workerPort = serversInfo[Integer.valueOf(desiredWorkerID)].split("_")[1];
+                        InitiateTask(Integer.valueOf(desiredWorkerID), wordsNotRespondedOnFromWorker, indexFolder, workerIP, workerPort, serversInfo.length);
+                    }
+
+                }
+            }
+        }
+    }
+
+    private HashMap<String,Integer> rerankResults(LinkedList<String> replies)
+    {
+        HashMap<String, Integer> _docsRank = new HashMap<String, Integer>();
+
+        for(String reply : replies)
+        {
+            String[] Parts = reply.trim().split(":");
+            if(Parts.length > 2)
+            {
+                if(!Parts[2].equals(""))
+                {
+                    String docsInfo = Parts[2];
+                    String[] docs = docsInfo.split(";");
+                    for(String docInfo : docs)
+                    {
+                        String docId = docInfo.trim().split(",")[0];
+                        int wordCount = Integer.valueOf(docInfo.trim().split(",")[1]);
+                        if(_docsRank.containsKey(docId))
+                        {
+                            int oldRank = docsRank.get(docId);
+                            oldRank+= 100 + wordCount;
+                            _docsRank.replace(docId,oldRank);
+                        }
+                        else
+                        {
+                            _docsRank.put(docId,100 + wordCount);
+                        }
+                    }
+                }
+            }
+
+        }
+        return _docsRank;
+    }
+
+    public HashMap<String,Integer> getQueryResult()
+    {
+        return docsRank.entrySet()
+                .stream()
+                .sorted(HashMap.Entry.comparingByValue(Collections.reverseOrder()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new
+                ));
     }
 }

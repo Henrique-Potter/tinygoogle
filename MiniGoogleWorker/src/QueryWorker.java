@@ -33,6 +33,7 @@ public class QueryWorker
             for(String token:words)
             {
                 String _filePath = indexFolder + "\\" + token.charAt(0) + "\\" + token.charAt(0) + "_Index.txt";
+                wordToDocuments.put(token,"");
                 try
                 {
                     File tempFile = new File(_filePath);
@@ -50,7 +51,7 @@ public class QueryWorker
                                 String[] Parts = Line.split("\t");
                                 if (Parts[0].trim().equals(token))
                                 {
-                                    wordToDocuments.put(token, Parts[1].trim());
+                                    wordToDocuments.replace(token, Parts[1].trim());
                                     break;
                                 }
                             }
