@@ -10,6 +10,33 @@ import java.util.stream.Collectors;
  */
 public class QueryMaster
 {
+    class MyHeartBeatThread implements Runnable
+    {
+        QueryMaster qMaster;
+
+        public MyHeartBeatThread(QueryMaster _qMaster) {
+            // store parameter for later user
+            qMaster = _qMaster;
+        }
+
+        public void run()
+        {
+            try
+            {
+                while (!endListiningToHeartBeat)
+                {
+                    qMaster.checkWorkersStateAndDoWorkShifiting("",qMaster.heartBeatTracker,qMaster.taskDone,qMaster.repliesReceived);
+                    Thread.sleep(heartBeatThreshold * 1000);
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
     private long heartBeatThreshold = 5;
     private String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index";
     private String[] serversInfo;
@@ -17,11 +44,18 @@ public class QueryMaster
     private DatagramSocket serverSocket;
     private String queryToRun = "";
     private HashMap<String,Integer> docsRank = new HashMap<String,Integer>();
+    private boolean endListiningToHeartBeat = false;
+
+    HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
+    HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
+    HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
+
 
     public QueryMaster(String Query)
     {
         queryToRun = Query;
     }
+
     public void RunQueryService()
     {
         try
@@ -50,21 +84,14 @@ public class QueryMaster
 
             //-------------------Task control
 
-            HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
-            HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
-            HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
+
 
             for (int i = 0; i < serversInfo.length; i++)//String server :serversInfo)
             {
                 taskDone.put(String.valueOf(i), false);
+                heartBeatTracker.put(String.valueOf(i), LocalDateTime.now());
             }
             HashMap<Integer, StringBuilder> queryDistribution = DistributeWordsOnWorkers(FullQuery, serversInfo.length);
-            //String workerPhoneBook = "";
-            //for(int i =0; i < serversInfo.length;i++)
-            //{
-            //    workerPhoneBook+= i+" " + serversInfo[i] + ";";
-            // }
-            //workerPhoneBook = workerPhoneBook.substring(0,workerPhoneBook.length() - 1);
 
             serverSocket = new DatagramSocket(myPort);
 
@@ -77,10 +104,23 @@ public class QueryMaster
                 String workerPort = serversInfo[i].split("_")[1];
                 String workerQuery = queryDistribution.get(i).toString().trim();
                 InitiateTask(i, workerQuery, indexPath, workerIP, workerPort, serversInfo.length);
+
+                HashMap<String, Boolean> wordsForWorker = new HashMap<String, Boolean>();
+                for(String word : workerQuery.split(" "))
+                {
+                    wordsForWorker.put(word.trim(), false);
+                }
+                repliesReceived.put(String.valueOf(i), wordsForWorker);
             }
             Boolean finished = false;
 
             StringBuilder allInformation = new StringBuilder();
+
+
+            Runnable r = new MyHeartBeatThread(this);
+            Thread heartBeatThread = new Thread(r);
+            heartBeatThread.start();
+
 
             while (!finished)
             {
@@ -94,19 +134,13 @@ public class QueryMaster
                 if (sentence.contains(",Done"))
                 {
                     System.out.println("RECEIVED: " + sentence);
-                /*InetAddress IPAddress = receivePacket.getAddress();
-                int port = receivePacket.getPort();
-                String finishedWorkerIP = IPAddress.toString();
-                finishedWorkerIP = finishedWorkerIP.replace("/","");
-                String key = finishedWorkerIP + "_" + port;
-                */
                     String workerID = sentence.split(",")[0];
                     System.out.println("Worker : " + workerID + " Finished");
                     taskDone.replace(workerID, true);
                 }
                 else if (sentence.substring(0, 4).equals("HBM,"))
                 {
-                    checkWorkersStateAndDoWorkShifiting(sentence, heartBeatTracker, taskDone, repliesReceived);
+                    HeartBeatHandler(sentence, heartBeatTracker);
                 }
                 else
                 {
@@ -124,6 +158,7 @@ public class QueryMaster
                 }
             }
 
+            endListiningToHeartBeat = true;
             docsRank = rerankResults(Replies);
             System.out.println(allInformation.toString());
         }
@@ -315,11 +350,13 @@ public class QueryMaster
         return nonResponsiveWorkers;
     }
 
-    private  void checkWorkersStateAndDoWorkShifiting(String heartBestMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState, HashMap<String, HashMap<String, Boolean>> repliesReceived)
+    private  void checkWorkersStateAndDoWorkShifiting(String heartBeatMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState, HashMap<String, HashMap<String, Boolean>> repliesReceived)
     {
-        HeartBeatHandler(heartBestMessage, heartBeatTracker);
+        if(!heartBeatMessage.trim().equals(""))
+        {
+            HeartBeatHandler(heartBeatMessage, heartBeatTracker);
+        }
         LinkedList<String> nonResponsiveIDs = getNonResponsiveWorkers(heartBeatTracker);
-
         for (String fallenWorkerID : nonResponsiveIDs)
         {
             if (taskState.get(fallenWorkerID) == true)

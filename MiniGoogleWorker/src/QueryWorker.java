@@ -20,10 +20,11 @@ public class QueryWorker
 
         public void run()
         {
-            //_parentWorker.recieveInformation();
+            _parentWorker.heartBeat();
         }
 
     }
+
     class Mapper
     {
         public HashMap<String, String> Map(String query, String indexFolder)
@@ -68,62 +69,11 @@ public class QueryWorker
             }
             return wordToDocuments;
         }
-
-        private void countWords(HashMap<String,Integer> wordCount, String text)
-        {
-            Pattern p = Pattern.compile("([^0-9A-Za-z\\s])+",Pattern.DOTALL);
-            text = text.replace("\n"," ").replace("\r"," ").replace(","," ").trim();
-            //text = text.replaceAll("^([0-9A-Za-z]+)", " ");
-            text =  p.matcher(text).replaceAll("");
-            text = text.replaceAll("\\s+", " ");
-            text = text.trim().toLowerCase();
-
-            String[] tokens = text.split(" ");
-            for(String token:tokens)
-            {
-                token = token.trim();
-                if(wordCount.containsKey(token))
-                {
-                    int oldValue = wordCount.get(token);
-                    oldValue++;
-                    wordCount.replace(token,oldValue);
-                }
-                else
-                {
-                    wordCount.put(token, 1);
-                }
-            }
-        }
-    }
-
-    class Reducer
-    {
-        /*public void Reduce(HashMap<String, String>  wordToDocuments)
-        {
-            for(String token : wordToDocuments)
-            {
-
-            }
-            if(wordCountToWrite.containsKey(key))
-            {
-                int previousCount = wordCountToWrite.get(key);
-                previousCount += count;
-                wordCountToWrite.replace(key,count);
-            }
-            else
-            {
-                wordCountToWrite.put(key, count);
-            }
-        }
-        */
     }
 
     QueryWorker.Mapper mP = new QueryWorker.Mapper();
-    QueryWorker.Reducer rR = new QueryWorker.Reducer();
 
     String workerType = ""; // M, R, MR
-    //int numberOfReducers = 0;
-    //HashMap<Integer,String> reducerPhoneBook = new HashMap<Integer, String>();
 
     int ID;
     String myPortNumber = "";
@@ -132,6 +82,8 @@ public class QueryWorker
 
     String queryMasterIP = "";
     String queryMasterPortNumber = "";
+    boolean endThread = false;
+    int sendingHeartBEatFrequency = 2000;
 
     public QueryWorker(int myID, String _myIP, String _myPortNumber, String indexPath, String _queryMasterIP, String _queryMasterPortNumber)
     {
@@ -141,6 +93,7 @@ public class QueryWorker
         myPortNumber =  _myPortNumber;
         queryMasterIP = _queryMasterIP.replace("/","");
         queryMasterPortNumber = _queryMasterPortNumber;
+        endThread = false;
     }
 
     public int hashFunction(String token, int seed) // seed is the number of reducers -> number of workers as workers are both reducers and mappers
@@ -156,32 +109,30 @@ public class QueryWorker
 
     public void execute(String query)
     {
-        //Runnable r = new QueryWorker.MySocketThread(this);
-        //Thread recieveDataThread = new Thread(r);
-
-        //Thread recieveDataThread = new Thread(){public void run(){try{recieveInformation();} catch(Exception v) {}}};
-        //recieveDataThread.start();
-
-        HashMap<String,String> wordToDocs = mP.Map( query, _indexPath);
-        for(String word : wordToDocs.keySet())
-        {
-            sendInformation(word, wordToDocs.get(word), queryMasterIP, queryMasterPortNumber);
-        }
-
-        // send Index master that reducerFinishedWorking
-        communicateWithQueryMaster();
-
-        // wait for index master to termintate the process
         try
         {
-            //recieveDataThread.join();
+            Runnable r = new QueryWorker.MySocketThread(this);
+            Thread heartBeatThread = new Thread(r);
+
+            //Thread recieveDataThread = new Thread(){public void run(){try{recieveInformation();} catch(Exception v) {}}};
+            heartBeatThread.start();
+
+            HashMap<String, String> wordToDocs = mP.Map(query, _indexPath);
+            for (String word : wordToDocs.keySet())
+            {
+                sendInformation(word, wordToDocs.get(word), queryMasterIP, queryMasterPortNumber);
+            }
+
+            // send Index master that reducerFinishedWorking
+            communicateWithQueryMaster();
+
+            terminateThread();
+            //System.out.println("Finished Execution");
         }
         catch(Exception e)
         {
-            System.out.println("error in waiting");
+            e.printStackTrace();
         }
-
-        //System.out.println("Finished Execution");
     }
 
     public void communicateWithQueryMaster()
@@ -247,48 +198,33 @@ public class QueryWorker
         }
     }
 
-    /*public void recieveInformation()
+    public void heartBeat()
     {
         try
         {
-            DatagramSocket serverSocket = new DatagramSocket(Integer.valueOf(myPortNumber));
-            while (true)
+            DatagramSocket serverSocket = new DatagramSocket();
+            while (!endThread)
             {
-                byte[] receiveData = new byte[64];
                 byte[] sendData = new byte[64];
-                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                serverSocket.receive(receivePacket);
-                String sentence = new String(receivePacket.getData());
-                sentence = sentence.replace("\n","").replace("\r","").trim();
-
-                System.out.println("Recieved " + sentence);
-
-                if(sentence.equals("endprocess"))
-                {
-                    System.out.println("recieved finishing command from index master");
-                    serverSocket.close();
-                    return;
-                }
-                String[] parts = sentence.split(":");
-                String word = parts[0];
-                String number = parts[1].replace("\n","").replace("\r","").replace("\\","").replace("/","").trim();
-                int count = Integer.valueOf(number);
-
-                //System.out.println("Recieved word "+ word + ":" + count);
-                rR.Reduce(word, count);
-                InetAddress IPAddress = receivePacket.getAddress();
-                int port = receivePacket.getPort();
-
-                sendData = "ack".getBytes();
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+                String message = "HBM,"+String.valueOf(ID);
+                sendData = message.getBytes();
+                InetAddress IPAddress = InetAddress.getByName(queryMasterIP);
+                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(queryMasterPortNumber));
                 serverSocket.send(sendPacket);
-                //serverSocket.close();
+
+                Thread.sleep(sendingHeartBEatFrequency);
             }
-        }
-        catch(Exception e)
+            serverSocket.close();
+        } catch (Exception e)
         {
             e.printStackTrace();
-            System.out.println("exception");
         }
-    }*/
+
+    }
+
+    public void terminateThread()
+    {
+        endThread = true;
+    }
+
 }
