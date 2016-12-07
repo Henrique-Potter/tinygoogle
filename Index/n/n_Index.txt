@@ -1,0 +1,4 @@
+number	0,1
+night	0,1
+nothing	0,1
+normal	0,1

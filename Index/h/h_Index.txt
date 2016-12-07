@@ -1,0 +1,6 @@
+had	0,3
+heat	0,1
+harsh	0,1
+hour	0,1
+hence	0,1
+heard	0,1

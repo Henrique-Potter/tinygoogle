@@ -1,0 +1,7 @@
+order	0,1
+other	0,1
+out	0,1
+of	0,10
+on	0,1
+ow	0,1
+open	0,1

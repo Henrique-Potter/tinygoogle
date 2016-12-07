@@ -1,0 +1,10 @@
+crowd	0,1
+courts	0,1
+curious	0,1
+cardinal	0,1
+causesa	0,1
+cold	0,1
+cornices	0,1
+cynicism	0,1
+clamor	0,1
+closed	0,1

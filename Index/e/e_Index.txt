@@ -1,0 +1,5 @@
+elbow	0,1
+each	0,1
+even	0,1
+entablatures	0,1
+every	0,1

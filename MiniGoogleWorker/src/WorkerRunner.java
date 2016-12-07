@@ -9,6 +9,7 @@ public class WorkerRunner
 {
     public static void main(String args[]) throws Exception
     {
+
         String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
         String[] parts = nameServerInfo.split("\n");
         int nameServerPort = new Integer(parts[0].trim());
@@ -31,7 +32,7 @@ public class WorkerRunner
             serverSocket.receive(receivePacket);
             String sentence = new String(receivePacket.getData());
             sentence = sentence.replace("\n","").replace("\r","").trim();
-            if(sentence.substring(0,3).equals("DW,"))
+            if(sentence.substring(0,4).equals("DIW,"))
             {
                 System.out.println("RECEIVED: " + sentence);
                 sentence = sentence.substring(3);
@@ -54,7 +55,7 @@ public class WorkerRunner
 
 
                 serverSocket.close();
-                Worker currentWorker = new Worker(workerID, myIp, String.valueOf(myPort), indexPath,
+                IndexingWorker currentWorker = new IndexingWorker(workerID, myIp, String.valueOf(myPort), indexPath,
                         indexMasterIP, String.valueOf(indexMasterPortNumber), numberOfReducers, reducersPhoneBook);
 
                 currentWorker.execute(docID, Integer.valueOf(startingIndex), Integer.valueOf(chunkLength), filePath);
@@ -65,6 +66,30 @@ public class WorkerRunner
                 //DatagramPacket sendPacket =
                 //        new DatagramPacket(sendData, sendData.length, IPAddress, port);
                 //serverSocket.send(sendPacket);
+            }
+            else if(sentence.substring(0,4).equals("DQW,"))
+            {
+                System.out.println("RECEIVED Query: " + sentence);
+                sentence = sentence.substring(4);
+                InetAddress IPAddress = receivePacket.getAddress();
+                int port = receivePacket.getPort();
+
+                String queryMasterIP = IPAddress.toString();
+                int queryMasterPortNumber = port;
+
+                String[] requestParts = sentence.split(",");
+
+                int workerID = Integer.valueOf(requestParts[0]);
+                String indexPath = requestParts[1];
+                int numberOfReducers = Integer.valueOf(requestParts[2]);
+                String query = requestParts[3].trim();
+                serverSocket.close();
+
+                QueryWorker currentWorker = new QueryWorker(workerID, myIp, String.valueOf(myPort), indexPath, queryMasterIP, String.valueOf(queryMasterPortNumber));
+
+                currentWorker.execute(query);
+
+                System.out.println("Finished Execution");
             }
         }
     }
@@ -155,11 +180,11 @@ public class WorkerRunner
             wholeText = in.readLine();
             if (wholeText.trim().replace("\r", "").replace("\n", "").toUpperCase().equals("D"))
             {
-                System.out.println("Worker Registered");
+                System.out.println("IndexingWorker Registered");
             }
             else if (wholeText.trim().replace("\r", "").replace("\n", "").toUpperCase().equals("F"))
             {
-                System.out.println("Worker Registration Failed");
+                System.out.println("IndexingWorker Registration Failed");
             }
             //--------------------------------
             registrationSocket.close();

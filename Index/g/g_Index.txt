@@ -1,0 +1,5 @@
+good	0,1
+goodly	0,1
+grand	0,1
+great	0,1
+grew	0,1

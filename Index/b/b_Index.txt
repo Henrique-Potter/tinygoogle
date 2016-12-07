@@ -1,0 +1,12 @@
+but	0,1
+been	0,2
+bad	0,1
+before	0,1
+bishop	0,1
+band	0,1
+bailiff	0,1
+began	0,1
+be	0,1
+bitter	0,1
+break	0,1
+bourbon	0,1

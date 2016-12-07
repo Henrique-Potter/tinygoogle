@@ -1,0 +1,11 @@
+through	0,1
+threshold	0,1
+trampled	0,1
+these	0,1
+that	0,2
+they	0,2
+teasing	0,1
+this	0,1
+their	0,3
+the	0,22
+to	0,3

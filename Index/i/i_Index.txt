@@ -1,0 +1,7 @@
+in	0,1
+its	0,1
+imprecations	0,1
+ironshod	0,1
+into	0,1
+impatience	0,1
+imparted	0,1

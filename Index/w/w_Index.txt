@@ -1,0 +1,14 @@
+whole	0,1
+weather	0,1
+which	0,2
+water	0,1
+waitinghad	0,1
+were	0,1
+who	0,2
+waiting	0,1
+weariness	0,1
+walls	0,1
+windowsills	0,1
+was	0,1
+with	0,2
+window	0,1

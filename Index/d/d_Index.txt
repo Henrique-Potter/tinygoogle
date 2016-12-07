@@ -1,0 +1,7 @@
+door	0,1
+de	0,1
+discontent	0,1
+day	0,1
+daybreak	0,1
+dense	0,1
+discomfort	0,1

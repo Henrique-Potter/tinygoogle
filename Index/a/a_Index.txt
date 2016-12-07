@@ -1,0 +1,17 @@
+above	0,1
+all	0,2
+already	0,1
+an	0,1
+appointed	0,1
+austria	0,1
+amusement	0,1
+arrival	0,1
+around	0,1
+across	0,1
+along	0,1
+and	0,4
+affirmed	0,1
+architecture	0,1
+a	0,2
+ambassadors	0,1
+accent	0,1

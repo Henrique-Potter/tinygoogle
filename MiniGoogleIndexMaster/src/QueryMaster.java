@@ -1,12 +1,13 @@
 import java.io.*;
 import java.net.*;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 
 /**
- * Created by Ahmed on 12/3/2016.
+ * Created by Ahmed on 12/6/2016.
  */
-public class IndexMaster
+public class QueryMaster
 {
     public static void main(String args[]) throws Exception
     {
@@ -15,29 +16,35 @@ public class IndexMaster
         int myPort = s.getLocalPort();
         s.close();
 
-
+        String FullQuery = "I hate hate hate hate people people";
         String FilePath = "G:\\Work\\Java\\Work Space_4\\test.txt";
+
+        //-------------------Name Server
         String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
         String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index";
         String[] parts = nameServerInfo.split("\n");
         int nameServerPort = new Integer(parts[0].trim());
         String nameServerIP = parts[1].trim();
 
+        //--------------------- Asking for workers
         String result = requestWorkers(2,nameServerIP,String.valueOf(nameServerPort));
         result = result.replace("\n","").replace("\r","").trim();
         String[] serversInfo = result.split(";");
-        HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
 
+        //-------------------Task control
+
+        HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
         for(int i =0;i < serversInfo.length;i++)//String server :serversInfo)
         {
             taskDone.put(String.valueOf(i), false);
         }
-        String workerPhoneBook = "";
-        for(int i =0; i < serversInfo.length;i++)
-        {
-            workerPhoneBook+= i+" " + serversInfo[i] + ";";
-        }
-        workerPhoneBook = workerPhoneBook.substring(0,workerPhoneBook.length() - 1);
+        HashMap<Integer,StringBuilder> queryDistribution = DistributeWordsOnWorkers(FullQuery, serversInfo.length);
+        //String workerPhoneBook = "";
+        //for(int i =0; i < serversInfo.length;i++)
+        //{
+        //    workerPhoneBook+= i+" " + serversInfo[i] + ";";
+       // }
+        //workerPhoneBook = workerPhoneBook.substring(0,workerPhoneBook.length() - 1);
         for(int i =0; i < serversInfo.length;i++)
         {
             int workerID = i;
@@ -45,10 +52,12 @@ public class IndexMaster
 
             String workerIP = serversInfo[i].split("_")[0];
             String workerPort = serversInfo[i].split("_")[1];
-
-            InitiateTask(myPort,i,String.valueOf(0), FilePath,String.valueOf(i * 800),"800",indexPath,workerIP,workerPort,serversInfo.length,workerPhoneBook);
+            String workerQuery = queryDistribution.get(i).toString().trim();
+            InitiateTask(myPort,i,workerQuery,indexPath,workerIP,workerPort,serversInfo.length);
         }
         Boolean finished = false;
+
+        StringBuilder allInformation = new StringBuilder();
         DatagramSocket serverSocket = new DatagramSocket(myPort);
         while(!finished)
         {
@@ -62,17 +71,20 @@ public class IndexMaster
             if(sentence.contains(",Done"))
             {
                 System.out.println("RECEIVED: " + sentence);
-                InetAddress IPAddress = receivePacket.getAddress();
+                /*InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
                 String finishedWorkerIP = IPAddress.toString();
                 finishedWorkerIP = finishedWorkerIP.replace("/","");
                 String key = finishedWorkerIP + "_" + port;
-                System.out.println( key + " Finished");
-
+                */
                 String workerID = sentence.split(",")[0];
+                System.out.println( "Worker : " + workerID + " Finished");
                 taskDone.replace(workerID, true);
             }
-
+            else
+            {
+                allInformation.append(sentence + "\n");
+            }
             finished = true;
             for(String key : taskDone.keySet())
             {
@@ -84,13 +96,14 @@ public class IndexMaster
             }
         }
 
-        for(String key :  serversInfo)
+        System.out.println(allInformation.toString());
+        /*for(String key :  serversInfo)
         {
             System.out.println("Terminating workers");
             String IP = key.split("_")[0];
             String Port = key.split("_")[1];
             terminateTask(IP,Port);
-        }
+        }*/
     }
 
     public static String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
@@ -158,11 +171,10 @@ public class IndexMaster
 
     }
 
-    public static void InitiateTask(int portNumber, int workerID, String docID, String filePath,
-                                    String startingIndex, String chunkLength, String indexPath,
-                                    String workerIP, String workerPort, int numOfReducers, String phoneBook)
+    public static void InitiateTask(int portNumber, int workerID, String query, String indexFolder,
+                                    String workerIP, String workerPort, int numOfReducers)
     {
-        String message = "DIW," + workerID + ","+ docID + "," + filePath+ "," + startingIndex + "," + chunkLength + "," + indexPath+","+numOfReducers + "," +phoneBook ;
+        String message = "DQW," + workerID + ","+ indexFolder+","+numOfReducers + "," +query ;
         try
         {
             DatagramSocket clientSocket = new DatagramSocket(portNumber);
@@ -203,5 +215,55 @@ public class IndexMaster
         {
 
         }
+    }
+
+    public static HashMap<Integer, StringBuilder> DistributeWordsOnWorkers(String Query, int numberOfWorkers)
+    {
+        String cleanedQuery = Query.replace("\r", "").replace("\n", "").trim().toLowerCase();
+        cleanedQuery = cleanedQuery.replace("([^0-9A-Za-z\\s])+", " ");
+        cleanedQuery = cleanedQuery.replace("\\s+", " ");
+        cleanedQuery = cleanedQuery.trim();
+
+        String[] Tokens = cleanedQuery.split(" ");
+        HashSet<String> uniqueWords = new HashSet<String>();
+        for (String token : Tokens)
+        {
+            if (!uniqueWords.contains(token))
+            {
+                uniqueWords.add(token);
+            }
+        }
+        Tokens = new String[uniqueWords.size()];
+        Tokens =  uniqueWords.toArray(Tokens);
+        HashMap<Integer, StringBuilder> workersWords = new HashMap<Integer, StringBuilder>();
+        for (String token : Tokens)
+        {
+            int ID = hashFunction(token, numberOfWorkers);
+            if (workersWords.containsKey(ID))
+            {
+                StringBuilder sB= workersWords.get(ID);
+                sB.append(token + " ");
+                workersWords.replace(ID,sB);
+            }
+            else
+            {
+                StringBuilder sB = new StringBuilder();
+                sB.append(token + " ");
+                workersWords.put(ID, sB);
+            }
+        }
+
+        return workersWords;
+    }
+
+    public static int hashFunction(String token, int seed) // seed is the number of reducers -> number of workers as workers are both reducers and mappers
+    {
+        char firstChar = token.charAt(0);
+        int charValue = firstChar - 'a';
+        int allChars = 'z' - 'a' + 1;
+        int winodwLength = (int)Math.ceil((float)allChars / (float)seed);
+        int reducerId = charValue / winodwLength;
+
+        return reducerId;
     }
 }

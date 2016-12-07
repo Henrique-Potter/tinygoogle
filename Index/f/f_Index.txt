@@ -1,0 +1,8 @@
+fatigue	0,1
+flemish	0,1
+fools	0,1
+forth	0,1
+folly	0,1
+for	0,1
+fitted	0,1
+first	0,1

@@ -4,19 +4,17 @@ import java.io.FileReader;
 import java.util.HashMap;
 import java.io.*;
 import java.net.*;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Created by Ahmed on 11/29/2016.
  */
-public class Worker
+public class IndexingWorker
 {
     class MySocketThread implements Runnable
     {
-        Worker _parentWorker;
-        public MySocketThread(Worker parentWorker) {
+        IndexingWorker _parentWorker;
+        public MySocketThread(IndexingWorker parentWorker) {
             // store parameter for later user
             _parentWorker = parentWorker;
         }
@@ -101,6 +99,7 @@ public class Worker
             }
         }
     }
+
     class Reducer
     {
         HashMap<String,Integer> wordCountToWrite = new HashMap<String, Integer>();
@@ -111,7 +110,7 @@ public class Worker
             {
                 int previousCount = wordCountToWrite.get(key);
                 previousCount += count;
-                wordCountToWrite.replace(key,count);
+                wordCountToWrite.replace(key,previousCount);
             }
             else
             {
@@ -121,6 +120,23 @@ public class Worker
 
         public void writeDataInIndex(String indexPath, String DocID)
         {
+            String IndexFolder = indexPath;
+
+            for(String word : wordCountToWrite.keySet())
+            {
+                String _filePath = IndexFolder + "\\" + word.charAt(0) + "\\" + word.charAt(0) + "_Index.txt";
+                try
+                {
+                    writeWordToIndex(word,wordCountToWrite.get(word),DocID,_filePath);
+                } catch (Exception e)
+                {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+        }
+        public void writeWordToIndex(String wordToWrite, int wordToWriteCount, String DocID, String indexPath)
+        {
             String _filePath = indexPath;
             try
             {
@@ -129,12 +145,11 @@ public class Worker
                 {
                     FileReader inputFile = new FileReader(_filePath);
                     BufferedReader bufferReader = new BufferedReader(inputFile);
-                    Writer infoWriter = new BufferedWriter(new OutputStreamWriter(
-                            new FileOutputStream(_filePath), "utf-8"));
 
-                    while(bufferReader.readLine() != null)
+                    StringBuilder sB = new StringBuilder();
+                    String line = bufferReader.readLine();
+                    while (line != null)
                     {
-                        String line = bufferReader.readLine();
                         line = line.replace("\r", "").replace("\n", "").trim();
                         if (!line.equals(""))
                         {
@@ -142,12 +157,12 @@ public class Worker
                             String word = Parts[0];
                             String docs = Parts[1];
 
-                            if (wordCountToWrite.containsKey(word))
+                            if (wordToWrite.equals(word))
                             {
                                 String[] allDocs = docs.split(";");
-                                HashMap<String, Integer> wordCountInDocs = new HashMap<String,Integer>();
+                                HashMap<String, Integer> wordCountInDocs = new HashMap<String, Integer>();
 
-                                for(int i =0;i < allDocs.length;i++)
+                                for (int i = 0; i < allDocs.length; i++)
                                 {
                                     String[] docInfo = allDocs[i].trim().split(",");
                                     String docId = docInfo[0].trim();
@@ -155,38 +170,38 @@ public class Worker
                                     wordCountInDocs.put(docId, Integer.valueOf(wordCount));
                                 }
 
-                                if(wordCountInDocs.containsKey(DocID))
+                                if (wordCountInDocs.containsKey(DocID))
                                 {
 
                                 }
                                 else
                                 {
-                                    infoWriter.write(word + "\t" + docs + ";"+DocID+","+wordCountToWrite.get(word)+"\n");
+                                    //infoWriter.write(word + "\t" + docs + ";" + DocID + "," + wordToWriteCount + "\n");
+                                    sB.append(word + "\t" + docs + ";" + DocID + "," + wordToWriteCount + "\n");
                                 }
-                                wordCountToWrite.remove(word);
+                                //break;
                             }
                             else
                             {
-                                infoWriter.write(word + "\t" + docs + "\n");
+                                //infoWriter.write(word + "\t" + docs + "\n");
+                                sB.append(word + "\t" + docs + "\n");
                             }
                         }
+                        line = bufferReader.readLine();
                     }
                     bufferReader.close();
                     // Write RemainingWords
-                    for(String word : wordCountToWrite.keySet())
-                    {
-                        infoWriter.write(word + "\t" + DocID+","+wordCountToWrite.get(word)+"\n");
-                    }
+                    Writer infoWriter = new BufferedWriter(new OutputStreamWriter(
+                            new FileOutputStream(_filePath), "utf-8"));
+                    infoWriter.write(sB.toString());
+                    infoWriter.write(wordToWrite + "\t" + DocID + "," + wordToWriteCount + "\n");
                     infoWriter.close();
                 }
                 else
                 {
                     Writer infoWriter = new BufferedWriter(new OutputStreamWriter(
                             new FileOutputStream(_filePath), "utf-8"));
-                    for(String word : wordCountToWrite.keySet())
-                    {
-                        infoWriter.write(word + "\t" + DocID+","+wordCountToWrite.get(word)+"\n");
-                    }
+                    infoWriter.write(wordToWrite + "\t" + DocID + "," + wordToWriteCount + "\n");
                     infoWriter.close();
                 }
             }
@@ -213,7 +228,7 @@ public class Worker
     String indexMasterIP = "";
     String indexMasterPortNumber = "";
 
-    public Worker(int myID, String _myIP, String _myPortNumber, String indexPath, String _indexMasterIP, String _indexMasterPortNumber, int _numberOfReducers, String reducersInformation)
+    public IndexingWorker(int myID, String _myIP, String _myPortNumber, String indexPath, String _indexMasterIP, String _indexMasterPortNumber, int _numberOfReducers, String reducersInformation)
     {
         ID = myID;
         _indexPath = indexPath;
@@ -342,11 +357,11 @@ public class Worker
 
 
             clientSocket.send(sendPacket);
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            clientSocket.receive(receivePacket);
-            String reply = new String(receivePacket.getData());
-            reply = reply.replace("\n","").replace("\r","").trim();
-            if(reply.toLowerCase().equals("ack"))
+            //DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            //clientSocket.receive(receivePacket);
+            //String reply = new String(receivePacket.getData());
+            //reply = reply.replace("\n","").replace("\r","").trim();
+            //if(reply.toLowerCase().equals("ack"))
             {
                 clientSocket.close();
             }
