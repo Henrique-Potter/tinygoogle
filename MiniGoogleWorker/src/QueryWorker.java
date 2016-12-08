@@ -140,8 +140,8 @@ public class QueryWorker
         try
         {
             DatagramSocket clientSocket = new DatagramSocket();//Integer.valueOf(myPortNumber));
-            byte[] sendData = new byte[64];
-            byte[] receiveData = new byte[64];
+            byte[] sendData = new byte[2048];
+            byte[] receiveData = new byte[2048];
 
             String message = String.valueOf(ID) + ",Done";
             sendData = message.getBytes();
@@ -171,8 +171,8 @@ public class QueryWorker
         try
         {
             DatagramSocket clientSocket = new DatagramSocket();//Integer.valueOf(myPortNumber));
-            byte[] sendData = new byte[64];
-            byte[] receiveData = new byte[1024];
+            byte[] sendData = new byte[2048];
+            byte[] receiveData = new byte[2048];
 
             String message = String.valueOf(ID) + ":" + word + ":" + wordToDocs;
             sendData = message.getBytes();
@@ -205,7 +205,7 @@ public class QueryWorker
             DatagramSocket serverSocket = new DatagramSocket();
             while (!endThread)
             {
-                byte[] sendData = new byte[64];
+                byte[] sendData = new byte[2048];
                 String message = "HBM,"+String.valueOf(ID);
                 sendData = message.getBytes();
                 InetAddress IPAddress = InetAddress.getByName(queryMasterIP);

@@ -1,4 +1,4 @@
-import com.sun.java.util.jar.pack.ConstantPool;
+//import com.sun.java.util.jar.pack.ConstantPool;
 
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -42,8 +42,6 @@ public class MiniGoogleServer
             {
 
             }
-            ServerStub SS = new ServerStub();
-            SS.executeService(cs);
         }
 
     }
@@ -51,7 +49,7 @@ public class MiniGoogleServer
     public static void main(String args[]) throws Exception
     {
 
-        ServerSocket s = null;
+        /*ServerSocket s = null;
         try
         {
             s = new ServerSocket(0);
@@ -98,11 +96,53 @@ public class MiniGoogleServer
                 }
             }
         }
+*/
+        boolean succes = false;
+        IndexMaster iM = new IndexMaster("G:\\Work\\Java\\Work Space_4\\test.txt",2, 14);
+        succes = iM.RunIndexService();
+        System.out.println("Done Indexing 1 " + succes);
+        Thread.sleep(1000);
+        IndexMaster iM2 = new IndexMaster("G:\\Work\\Java\\Work Space_4\\test.txt",2, 15);
+        succes = iM2.RunIndexService();
+        System.out.println("Done Indexing 2" + succes);
+        Thread.sleep(1000);
+        IndexMaster iM3 = new IndexMaster("G:\\Work\\Java\\Work Space_4\\test.txt",2, 16);
+        succes = iM3.RunIndexService();
+        System.out.println("Done Indexing 3" + succes);
+        Thread.sleep(1000);
+        IndexMaster iM4 = new IndexMaster("G:\\Work\\Java\\Work Space_4\\test.txt",2, 17);
+        succes = iM4.RunIndexService();
+        System.out.println("Done Indexing 4" + succes);
+        Thread.sleep(1000);
+        IndexMaster iM5 = new IndexMaster("G:\\Work\\Java\\Work Space_4\\test.txt",2, 18);
+        succes = iM5.RunIndexService();
+        System.out.println("Done Indexing 5" + succes);
 
+        Thread.sleep(1000);
         String Query = "I hate hate hate hate people people";
         QueryMaster qM = new QueryMaster(Query);
-        qM.RunQueryService();
+        succes = qM.RunQueryService();
         HashMap<String,Integer> docIDs = qM.getQueryResult();
-        System.out.println("Done");
+        System.out.println("Done Searching first time " + succes);
+
+        Thread.sleep(1000);
+        QueryMaster qM2 = new QueryMaster(Query);
+        succes = qM2.RunQueryService();
+        docIDs = qM2.getQueryResult();
+        System.out.println("Done Searching second time " + succes);
+
+        Thread.sleep(1000);
+        QueryMaster qM3 = new QueryMaster(Query);
+        succes = qM3.RunQueryService();
+        docIDs = qM3.getQueryResult();
+        System.out.println("Done Searching third time " + succes);
+
+        Thread.sleep(1000);
+        QueryMaster qM4 = new QueryMaster(Query);
+        succes = qM2.RunQueryService();
+        docIDs = qM2.getQueryResult();
+        System.out.println("Done Searching fourth time " + succes);
+
+
     }
 }
