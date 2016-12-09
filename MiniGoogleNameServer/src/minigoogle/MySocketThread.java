@@ -93,9 +93,8 @@ public class MySocketThread implements Runnable {
 
     private void setAliveWorker(String text) {
         String parts[] = text.split(",");
-        String workerType = parts[1].trim();
-        String Ip = parts[2].trim();
-        String Port = parts[3].trim();
+        String Ip = parts[1].trim();
+        String Port = parts[2].trim();
 
         String workerID = Ip + "_" + Port;
 
