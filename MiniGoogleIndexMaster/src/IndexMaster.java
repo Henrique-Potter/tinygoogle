@@ -11,11 +11,12 @@ import java.util.LinkedList;
  */
 public class IndexMaster
 {
-    class MyHeartBeatThread implements Runnable
+    private class MyHeartBeatThread implements Runnable
     {
         IndexMaster iMaster;
 
-        public MyHeartBeatThread(IndexMaster _iMaster) {
+        public MyHeartBeatThread(IndexMaster _iMaster)
+        {
             // store parameter for later user
             iMaster = _iMaster;
         }
@@ -26,11 +27,10 @@ public class IndexMaster
             {
                 while (!endListiningToHeartBeat)
                 {
-                    checkWorkersStateAndDoWorkShifiting("",heartBeatTracker,taskDone);
+                    checkWorkersStateAndDoWorkShifiting("", heartBeatTracker, taskDone);
                     Thread.sleep(heartBeatThreshold * 1000);
                 }
-            }
-            catch (Exception e)
+            } catch (Exception e)
             {
                 e.printStackTrace();
             }
@@ -38,40 +38,35 @@ public class IndexMaster
 
     }
 
-    class failedPart
+    private class failedPart
     {
         int startIndex = 0;
         int Length = 0;
     }
 
     private String FilePath = "G:\\Work\\Java\\Work Space_4\\test.txt";
-    private int numberOfWorkers = 0;
+    private int numberOfWorkers = 2;
     private boolean endListiningToHeartBeat = false;
-    int heartBeatThreshold = 5;
-    HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
-    HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
-    String[] serversInfo;
+    private int heartBeatThreshold = 5;
+    private HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
+    private HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
+    private String[] serversInfo;
 
-    String indexFolder = "G:\\Work\\Java\\Work Space_4\\Index";
-    int DocID = 0;
-    int _myPortNumber = 0;
+    private String indexFolder = "";
+    private int DocID = 0;
+    private int _myPortNumber = 0;
 
-    public IndexMaster(String filePath, int _numberOfWorkers, int _DocID)
+    public IndexMaster(String filePath, int _DocID, String indexFolderPath)
     {
         FilePath = filePath;
-        numberOfWorkers = _numberOfWorkers;
+        //numberOfWorkers = _numberOfWorkers;
         taskDone = new HashMap<String, Boolean>();
         DocID = _DocID;
+        indexFolder = indexFolderPath;
     }
 
     public boolean RunIndexService()
     {
-        return indexDocument();
-    }
-
-    private boolean indexDocument()
-    {
-        boolean finishedSuccefully = true;
         try
         {
             ServerSocket s;
@@ -86,11 +81,23 @@ public class IndexMaster
             int nameServerPort = new Integer(parts[0].trim());
             String nameServerIP = parts[1].trim();
 
-            String result = requestWorkers(numberOfWorkers, nameServerIP, String.valueOf(nameServerPort));
+            String result = requestWorkers(nameServerIP, String.valueOf(nameServerPort));
             result = result.replace("\n", "").replace("\r", "").trim();
             serversInfo = result.split(";");
+            numberOfWorkers = serversInfo.length;
+            return indexDocument();
+        } catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        return false;
+    }
 
-
+    private boolean indexDocument()
+    {
+        boolean finishedSuccefully = true;
+        try
+        {
             for (int i = 0; i < serversInfo.length; i++)//String server :serversInfo)
             {
                 taskDone.put(String.valueOf(i), false);
@@ -102,7 +109,7 @@ public class IndexMaster
                 workerPhoneBook += i + " " + serversInfo[i] + ";";
             }
             workerPhoneBook = workerPhoneBook.substring(0, workerPhoneBook.length() - 1);
-
+            int textPieceLength = readDocumentAndgetNumberPartLength(FilePath,serversInfo.length);
             for (int i = 0; i < serversInfo.length; i++)
             {
                 int workerID = i;
@@ -111,7 +118,7 @@ public class IndexMaster
                 String workerIP = serversInfo[i].split("_")[0];
                 String workerPort = serversInfo[i].split("_")[1];
 
-                InitiateTask(myPort, i, String.valueOf(DocID), FilePath, String.valueOf(i * 800), "800", indexPath, workerIP, workerPort, serversInfo.length, workerPhoneBook);
+                InitiateTask(_myPortNumber, i, String.valueOf(DocID), FilePath, String.valueOf(i * textPieceLength), String.valueOf(textPieceLength), indexPath, workerIP, workerPort, serversInfo.length, workerPhoneBook);
             }
             Boolean finished = false;
 
@@ -119,7 +126,7 @@ public class IndexMaster
             Thread heartBeatThread = new Thread(r);
             heartBeatThread.start();
 
-            DatagramSocket serverSocket = new DatagramSocket(myPort);
+            DatagramSocket serverSocket = new DatagramSocket(_myPortNumber);
             while (!finished)
             {
                 System.out.println("Looping waiting for finishing signals");
@@ -171,8 +178,7 @@ public class IndexMaster
                 String Port = key.split("_")[1];
                 terminateTask(IP, Port);
             }
-        }
-        catch (Exception e)
+        } catch (Exception e)
         {
             e.printStackTrace();
         }
@@ -246,13 +252,13 @@ public class IndexMaster
                 String Port = key.split("_")[1];
                 terminateTask(IP, Port);
             }
-        }
-        catch (Exception e)
+        } catch (Exception e)
         {
             e.printStackTrace();
         }
     }
-    private  String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
+
+    private String requestWorkers(String nsIP, String nsPort)
     {
         try
         {
@@ -282,7 +288,7 @@ public class IndexMaster
         return "";
     }
 
-    private  String readNameServerCredentialsFromFile(String _filePath)
+    private String readNameServerCredentialsFromFile(String _filePath)
     {
         String FileContent = "";
         try
@@ -318,10 +324,10 @@ public class IndexMaster
     }
 
     private void InitiateTask(int portNumber, int workerID, String docID, String filePath,
-                                    String startingIndex, String chunkLength, String indexPath,
-                                    String workerIP, String workerPort, int numOfReducers, String phoneBook)
+                              String startingIndex, String chunkLength, String indexPath,
+                              String workerIP, String workerPort, int numOfReducers, String phoneBook)
     {
-        String message = "DIW," + workerID + ","+ docID + "," + filePath+ "," + startingIndex + "," + chunkLength + "," + indexPath+","+numOfReducers + "," +phoneBook ;
+        String message = "DIW," + workerID + "," + docID + "," + filePath + "," + startingIndex + "," + chunkLength + "," + indexPath + "," + numOfReducers + "," + phoneBook;
         try
         {
             DatagramSocket clientSocket = new DatagramSocket(portNumber);
@@ -335,8 +341,7 @@ public class IndexMaster
 
             clientSocket.send(sendPacket);
             clientSocket.close();
-        }
-        catch(Exception e)
+        } catch (Exception e)
         {
             e.printStackTrace();
             System.out.println(e.getMessage());
@@ -357,17 +362,16 @@ public class IndexMaster
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, Integer.valueOf(workerPort));
             clientSocket.send(sendPacket);
             clientSocket.close();
-        }
-        catch(Exception e)
+        } catch (Exception e)
         {
 
         }
     }
 
 
-    private  void checkWorkersStateAndDoWorkShifiting(String heartBeatMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState)
+    private void checkWorkersStateAndDoWorkShifiting(String heartBeatMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState)
     {
-        if(!heartBeatMessage.trim().equals(""))
+        if (!heartBeatMessage.trim().equals(""))
         {
             HeartBeatHandler(heartBeatMessage, heartBeatTracker);
         }
@@ -398,14 +402,14 @@ public class IndexMaster
             }
         }*/
         LinkedList<String> nonResponsiveIDs = getNonResponsiveWorkers(heartBeatTracker);
-        for(String fallenWorkerID : nonResponsiveIDs)
+        for (String fallenWorkerID : nonResponsiveIDs)
         {
             if (taskState.get(fallenWorkerID) == true)
             {
             }
             else
             {
-                if(serversInfo != null)
+                if (serversInfo != null)
                 {
                     for (String key : serversInfo)
                     {
@@ -435,7 +439,7 @@ public class IndexMaster
         }
     }
 
-    private  LinkedList<String> getNonResponsiveWorkers(HashMap<String, LocalDateTime> hBeats)
+    private LinkedList<String> getNonResponsiveWorkers(HashMap<String, LocalDateTime> hBeats)
     {
         LinkedList<String> nonResponsiveWorkers = new LinkedList<String>();
         for (String id : hBeats.keySet())
@@ -451,12 +455,13 @@ public class IndexMaster
         return nonResponsiveWorkers;
     }
 
-    private  void HeartBeatHandler(String message, HashMap<String, LocalDateTime> hBeats)
+    private void HeartBeatHandler(String message, HashMap<String, LocalDateTime> hBeats)
     {
         String[] parts = message.split(",");
         String workerID = parts[1].trim();
         hBeats.replace(workerID, LocalDateTime.now());
     }
+
     private String getMyIP()
     {
 
@@ -490,5 +495,37 @@ public class IndexMaster
             //return "192.168.1.1";
         }
         return "192.168.1.1";
+    }
+
+    private int readDocumentAndgetNumberPartLength(String filePath, int numberOfReducersUsed)
+    {
+        StringBuilder Content = new StringBuilder();
+        String _filePath = filePath;
+        try
+        {
+            File tempFile = new File(_filePath);
+            if (tempFile.exists())
+            {
+                FileReader inputFile = new FileReader(_filePath);
+                BufferedReader bufferReader = new BufferedReader(inputFile);
+
+                int count = 0;
+                int intch;
+                while (((intch = bufferReader.read()) != -1))
+                {
+                    count++;
+                }
+
+                bufferReader.close();
+                int pieceLength = (int)(count / numberOfReducersUsed) + 1;
+                return pieceLength;
+            }
+        }
+        catch (Exception e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return 0;
     }
 }

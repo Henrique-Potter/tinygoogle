@@ -43,12 +43,16 @@ public class IndexingWorker
                     {
                         int count = 0;
                         int intch;
-                        while (((intch = bufferReader.read()) != -1) && count < startingIndex)
+                        while (((intch = bufferReader.read()) != -1) && (count < startingIndex || ((char)intch != ' ' && (char)intch != '\n' && (char)intch != '\r')) && startingIndex != 0)
                         {
                             count++;
                         }
                         count = 0;
-                        while (((intch = bufferReader.read()) != -1) && count < chunkLength)
+                        if(intch != -1 && startingIndex == 0)
+                        {
+                            Content.append((char) intch);
+                        }
+                        while (((intch = bufferReader.read()) != -1) && (count < chunkLength || ((char)intch != ' ' && (char)intch != '\n' && (char)intch != '\r')))
                         {
                             Content.append((char) intch);
                             count++;

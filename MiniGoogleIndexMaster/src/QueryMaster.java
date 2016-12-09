@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
  */
 public class QueryMaster
 {
-    class MyHeartBeatThread implements Runnable
+    private class MyHeartBeatThread implements Runnable
     {
         QueryMaster qMaster;
 
@@ -47,14 +47,15 @@ public class QueryMaster
     private boolean endListiningToHeartBeat = false;
 
 
-    HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
-    HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
-    HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
+    private HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
+    private HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
+    private HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
 
 
-    public QueryMaster(String Query)
+    public QueryMaster(String Query, String IndexFolderPath)
     {
         queryToRun = Query;
+        indexFolder = IndexFolderPath;
     }
 
     public boolean RunQueryService()
