@@ -7,6 +7,41 @@ import java.util.Enumeration;
 
 public class WorkerRunner
 {
+    static class myHeartBeatThread implements Runnable
+    {
+        String MyIP = "";
+        String MyPort = "";
+        String nsPort = "";
+        String nsIP = "";
+        public myHeartBeatThread(String myIP, String myPort, String nameServerIP, String NameServerPortNumber) {
+            // store parameter for later user
+            MyIP = myIP;
+            MyPort = myPort;
+            nsIP = nameServerIP;
+            nsPort = NameServerPortNumber;
+        }
+
+        public void run()
+        {
+            while(true)
+            {
+                try
+                {
+                    Socket sc = new Socket(nsIP, Integer.valueOf(nsPort));
+                    PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
+                    out.write("W," + MyIP + "," +MyPort+ "\n");
+                    out.flush();
+                    sc.close();
+                    Thread.sleep(5000);
+                }catch(Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+    }
+
     public static void main(String args[]) throws Exception
     {
 
@@ -16,10 +51,15 @@ public class WorkerRunner
         String nameServerIP = parts[1].trim();
 
 
+
         DatagramSocket serverSocket = new DatagramSocket(0);
         int myPort = serverSocket.getLocalPort();
         String myIp = getMyIP();
         RegisterWithNameServer(nameServerIP, nameServerPort, myIp,myPort);
+
+        Runnable r = new myHeartBeatThread(myIp, String.valueOf(myPort), nameServerIP, String.valueOf(nameServerPort));
+        Thread t = new Thread(r);
+        t.start();
 
         while(true)
         {

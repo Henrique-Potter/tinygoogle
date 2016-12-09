@@ -55,6 +55,8 @@ public class IndexMaster
     private String indexFolder = "";
     private int DocID = 0;
     private int _myPortNumber = 0;
+    private int failedWorkerID = -1;
+    private String requestID = "";
 
     public IndexMaster(String filePath, int _DocID, String indexFolderPath)
     {
@@ -67,6 +69,8 @@ public class IndexMaster
 
     public boolean RunIndexService()
     {
+        boolean finishState = true;
+        failedWorkerID = -1;
         try
         {
             ServerSocket s;
@@ -83,19 +87,52 @@ public class IndexMaster
 
             String result = requestWorkers(nameServerIP, String.valueOf(nameServerPort));
             result = result.replace("\n", "").replace("\r", "").trim();
-            serversInfo = result.split(";");
+
+            //-----------------------------------------------------------
+            if(result.equals("NF"))
+            {
+                return false;
+            }
+            String[] allParts = result.split(";");
+            requestID = allParts[0].trim();
+            serversInfo = new String[allParts.length - 1];
+            for(int i =1; i < allParts.length;i++)
+            {
+                serversInfo[i-1] = allParts[i];
+            }
+            //serversInfo = result.split(";");
             numberOfWorkers = serversInfo.length;
-            return indexDocument();
+
+            finishState =  indexDocument();
+            if(finishState == false)
+            {
+                if (failedWorkerID > -1 && serversInfo.length > 1)
+                {
+                    String[] newServerInfo = new String[serversInfo.length - 1];
+                    int counter = 0;
+                    for (String st : serversInfo)
+                    {
+                        if(counter == failedWorkerID)
+                        {
+                            newServerInfo[counter] = st;
+                            counter++;
+                        }
+                    }
+                    serversInfo = newServerInfo;
+                    finishState = indexDocument();
+                }
+            }
         } catch (Exception e)
         {
             e.printStackTrace();
         }
-        return false;
+        return finishState;
     }
 
     private boolean indexDocument()
     {
         boolean finishedSuccefully = true;
+        taskDone = new HashMap<String, Boolean>();
         try
         {
             for (int i = 0; i < serversInfo.length; i++)//String server :serversInfo)
@@ -178,12 +215,15 @@ public class IndexMaster
                 String Port = key.split("_")[1];
                 terminateTask(IP, Port);
             }
+
+            serverSocket.close();
         } catch (Exception e)
         {
             e.printStackTrace();
         }
 
         endListiningToHeartBeat = true;
+
         return finishedSuccefully;
     }
 
@@ -265,7 +305,7 @@ public class IndexMaster
             Socket requestServerInfoSocket = new Socket(nsIP, Integer.valueOf(nsPort));
             PrintWriter out = new PrintWriter(requestServerInfoSocket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(requestServerInfoSocket.getInputStream()));
-            out.write("G,MR," + numberOfWorkers + "\n");
+            out.write("G,MR" + "\n");
             out.flush();
             //out.println("req:"+serviceName);
 
@@ -409,6 +449,7 @@ public class IndexMaster
             }
             else
             {
+                failedWorkerID = Integer.valueOf(fallenWorkerID);
                 if (serversInfo != null)
                 {
                     for (String key : serversInfo)
@@ -527,5 +568,27 @@ public class IndexMaster
             e.printStackTrace();
         }
         return 0;
+    }
+
+    public void releaseWorkers()
+    {
+        String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
+        String[] parts = nameServerInfo.split("\n");
+        int nameServerPort = new Integer(parts[0].trim());
+        String nameServerIP = parts[1].trim();
+
+        try
+        {
+            Socket requestServerInfoSocket = new Socket(nameServerIP, Integer.valueOf(nameServerPort));
+            PrintWriter out = new PrintWriter(requestServerInfoSocket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(new InputStreamReader(requestServerInfoSocket.getInputStream()));
+            out.write("S," +requestID + "\n");
+            out.flush();
+            requestServerInfoSocket.close();
+        } catch (Exception e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }

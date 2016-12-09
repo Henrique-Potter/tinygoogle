@@ -174,7 +174,7 @@ public class IndexingWorker
                     while (line != null)
                     {
                         line = line.replace("\r", "").replace("\n", "").trim();
-                        if (!line.equals(""))
+                        if (!line.equals("") && line.split("\t").length == 2)
                         {
                             String[] Parts = line.split("\t");
                             String word = Parts[0].trim();

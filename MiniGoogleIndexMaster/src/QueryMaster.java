@@ -45,7 +45,7 @@ public class QueryMaster
     private String queryToRun = "";
     private HashMap<String,Integer> docsRank = new HashMap<String,Integer>();
     private boolean endListiningToHeartBeat = false;
-
+private String requestID = "";
 
     private HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
     private HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
@@ -81,9 +81,20 @@ public class QueryMaster
             String nameServerIP = parts[1].trim();
 
             //--------------------- Asking for workers
-            String result = requestWorkers(2, nameServerIP, String.valueOf(nameServerPort));
+
+            String result = requestWorkers(nameServerIP, String.valueOf(nameServerPort));
             result = result.replace("\n", "").replace("\r", "").trim();
-            serversInfo = result.split(";");
+            if(result.equals("NF"))
+            {
+                return false;
+            }
+            String[] allParts = result.split(";");
+            requestID = allParts[0].trim();
+            serversInfo = new String[allParts.length - 1];
+            for(int i =1; i < allParts.length;i++)
+            {
+                serversInfo[i-1] = allParts[i];
+            }
 
             //-------------------Task control
 
@@ -170,6 +181,7 @@ public class QueryMaster
             endListiningToHeartBeat = true;
             docsRank = rerankResults(Replies);
             System.out.println(allInformation.toString());
+            serverSocket.close();
         }
         catch (Exception e)
         {
@@ -178,14 +190,14 @@ public class QueryMaster
         return finishedSuccefully;
     }
 
-    private  String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
+    private  String requestWorkers(String nsIP, String nsPort)
     {
         try
         {
             Socket requestServerInfoSocket = new Socket(nsIP, Integer.valueOf(nsPort));
             PrintWriter out = new PrintWriter(requestServerInfoSocket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(requestServerInfoSocket.getInputStream()));
-            out.write("G,MR," + numberOfWorkers + "\n");
+            out.write("G,MR," + "\n");
             out.flush();
             //out.println("req:"+serviceName);
 
@@ -524,5 +536,27 @@ public class QueryMaster
             //return "192.168.1.1";
         }
         return "192.168.1.1";
+    }
+
+    public void releaseWorkers()
+    {
+        String nameServerInfo = readNameServerCredentialsFromFile("G:\\Work\\Java\\Work Space_4\\ns.txt");
+        String[] parts = nameServerInfo.split("\n");
+        int nameServerPort = new Integer(parts[0].trim());
+        String nameServerIP = parts[1].trim();
+
+        try
+        {
+            Socket requestServerInfoSocket = new Socket(nameServerIP, Integer.valueOf(nameServerPort));
+            PrintWriter out = new PrintWriter(requestServerInfoSocket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(new InputStreamReader(requestServerInfoSocket.getInputStream()));
+            out.write("S," +requestID + "\n");
+            out.flush();
+            requestServerInfoSocket.close();
+        } catch (Exception e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }
