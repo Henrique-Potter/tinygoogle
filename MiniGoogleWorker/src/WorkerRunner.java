@@ -23,7 +23,7 @@ public class WorkerRunner
 
         while(true)
         {
-            byte[] receiveData = new byte[1024];
+            byte[] receiveData = new byte[2048];
             if (serverSocket.isClosed())
             {
                 serverSocket = new DatagramSocket(myPort);
@@ -35,7 +35,7 @@ public class WorkerRunner
             if(sentence.substring(0,4).equals("DIW,"))
             {
                 System.out.println("RECEIVED: " + sentence);
-                sentence = sentence.substring(3);
+                sentence = sentence.substring(4);
                 InetAddress IPAddress = receivePacket.getAddress();
                 int port = receivePacket.getPort();
 
@@ -61,6 +61,7 @@ public class WorkerRunner
                 currentWorker.execute(docID, Integer.valueOf(startingIndex), Integer.valueOf(chunkLength), filePath);
 
                 System.out.println("Finished Execution");
+
                 //String capitalizedSentence = sentence.toUpperCase();
                 //sendData = capitalizedSentence.getBytes();
                 //DatagramPacket sendPacket =

@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
  */
 public class QueryMaster
 {
-    class MyHeartBeatThread implements Runnable
+    private class MyHeartBeatThread implements Runnable
     {
         QueryMaster qMaster;
 
@@ -46,18 +46,21 @@ public class QueryMaster
     private HashMap<String,Integer> docsRank = new HashMap<String,Integer>();
     private boolean endListiningToHeartBeat = false;
 
-    HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
-    HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
-    HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
+
+    private HashMap<String, Boolean> taskDone = new HashMap<String, Boolean>();
+    private HashMap<String, LocalDateTime> heartBeatTracker = new HashMap<String, LocalDateTime>();
+    private HashMap<String, HashMap<String, Boolean>> repliesReceived = new HashMap<String, HashMap<String, Boolean>>();
 
 
-    public QueryMaster(String Query)
+    public QueryMaster(String Query, String IndexFolderPath)
     {
         queryToRun = Query;
+        indexFolder = IndexFolderPath;
     }
 
-    public void RunQueryService()
+    public boolean RunQueryService()
     {
+        boolean finishedSuccefully = true;
         try
         {
             ServerSocket s;
@@ -126,7 +129,7 @@ public class QueryMaster
             {
                 System.out.println("Looping waiting for finishing signals");
 
-                byte[] receiveData = new byte[64];
+                byte[] receiveData = new byte[2048];
                 DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 serverSocket.receive(receivePacket);
                 String sentence = new String(receivePacket.getData());
@@ -141,6 +144,12 @@ public class QueryMaster
                 else if (sentence.substring(0, 4).equals("HBM,"))
                 {
                     HeartBeatHandler(sentence, heartBeatTracker);
+                }
+                else if (sentence.equals("TERMINATE"))
+                {
+                    // Something wrong i sent to my self
+                    finishedSuccefully = false;
+                    break;
                 }
                 else
                 {
@@ -166,6 +175,7 @@ public class QueryMaster
         {
             e.printStackTrace();
         }
+        return finishedSuccefully;
     }
 
     private  String requestWorkers(int numberOfWorkers, String nsIP, String nsPort)
@@ -240,7 +250,7 @@ public class QueryMaster
         try
         {
             //DatagramSocket clientSocket = new DatagramSocket(portNumber);
-            byte[] sendData = new byte[1024];
+            byte[] sendData = new byte[2048];
 
             //String message = word + ":" + currentWordCount;
             sendData = message.getBytes();
@@ -263,7 +273,7 @@ public class QueryMaster
         try
         {
             DatagramSocket clientSocket = new DatagramSocket();
-            byte[] sendData = new byte[64];
+            byte[] sendData = new byte[2048];
 
             String message = "endprocess";
             sendData = message.getBytes();
@@ -352,6 +362,24 @@ public class QueryMaster
 
     private  void checkWorkersStateAndDoWorkShifiting(String heartBeatMessage, HashMap<String, LocalDateTime> heartBeatTracker, HashMap<String, Boolean> taskState, HashMap<String, HashMap<String, Boolean>> repliesReceived)
     {
+        if(taskState.keySet().size() == 0)
+        {
+            try
+            {
+                DatagramSocket dS = new DatagramSocket();
+                byte[] sendData = new byte[2048];
+
+                String message = "TERMINATE";
+                sendData = message.getBytes();
+                String myIpAddress = getMyIP();
+                InetAddress IPAddress = InetAddress.getByName(myIpAddress);
+                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, myPort);
+                dS.send(sendPacket);
+                dS.close();
+            } catch (Exception e)
+            {
+            }
+        }
         if(!heartBeatMessage.trim().equals(""))
         {
             HeartBeatHandler(heartBeatMessage, heartBeatTracker);
@@ -434,7 +462,7 @@ public class QueryMaster
                         int wordCount = Integer.valueOf(docInfo.trim().split(",")[1]);
                         if(_docsRank.containsKey(docId))
                         {
-                            int oldRank = docsRank.get(docId);
+                            int oldRank = _docsRank.get(docId);
                             oldRank+= 100 + wordCount;
                             _docsRank.replace(docId,oldRank);
                         }
@@ -461,5 +489,40 @@ public class QueryMaster
                         (e1, e2) -> e1,
                         LinkedHashMap::new
                 ));
+    }
+
+    private String getMyIP()
+    {
+
+        String ip = "";
+        try
+        {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements())
+            {
+                NetworkInterface iface = interfaces.nextElement();
+                // filters out 127.0.0.1 and inactive interfaces
+                if (iface.isLoopback() || !iface.isUp())
+                    continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements())
+                {
+                    InetAddress addr = addresses.nextElement();
+                    ip = addr.getHostAddress();
+                    return ip;
+                    //if(ip.contains("192.168.1"))
+                    //	{
+                    //		return ip;
+                    //	}
+                    //System.out.println(iface.getDisplayName() + " " + ip);
+                }
+            }
+        } catch (SocketException e)
+        {
+            //throw new RuntimeException(e);
+            //return "192.168.1.1";
+        }
+        return "192.168.1.1";
     }
 }
